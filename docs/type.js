@@ -68,12 +68,17 @@ export function textBox(str, { x, y, size=0.1, align='left', font=plotter }) {
 }
 
 // Draws str on an Svg (see svg.js), one path per letter, scaled by size and moved into place. Everything else (stroke,
-// strokeWidth, strokeOpacity) is passed along to the paths
-export function drawText(svg, str, { x, y, size=0.1, align='left', font=plotter, ...args }) {
+// strokeWidth, strokeOpacity) is passed along to the paths. strokeWidth is in the drawing's units, like every other
+// path's: the scale would shrink it along with the letters, so it's scaled back up to match
+export function drawText(svg, str, { x, y, size=0.1, align='left', font=plotter, strokeWidth=1, ...args }) {
   let left = textBox(str, { x, y, size, align, font }).left
   str.split('').forEach(c => {
     const [d, width, yOffset] = glyph(font, c)
-    svg.path(d, { ...args, transform: `translate(${left} ${y + yOffset * size}) scale(${size})` })
+    // a glyph that only moves the pen (a space is just 'M0 0') is skipped, or a plotter puts a dot down where it lands
+    if (/[LHVCSQTAZ]/i.test(d)) {
+      svg.path(d, { ...args, strokeWidth: strokeWidth / size,
+                    transform: `translate(${left} ${y + yOffset * size}) scale(${size})` })
+    }
     left += width * size
   })
 }
