@@ -7,11 +7,12 @@ import { generateGears } from './gears.js'
 // These are rosette2.js's drawing strategies, numbered as they were there
 export const styles = {
   // every layer as its own closed line (1, drawRibbedRosette)
-  standard: ctx => times(ctx.count, t => loop(ctx.ring({ t, spiral: true }), ctx.color(t))),
+  standard: ctx => ctx.layers.map(t => loop(ctx.ring({ t, spiral: true }), ctx.color(t))),
 
   // straight lines from the innermost layer out to the outermost (2)
   //   lines: how many
-  lines: ctx => rungs(
+  // (with a single layer, there's nothing to run between)
+  lines: ctx => ctx.single ? [] : rungs(
     ctx.ring({ t: 0, points: ctx.settings.lines }),
     ctx.ring({ t: ctx.count - 1, points: ctx.settings.lines }),
     ctx.color(0)
@@ -21,7 +22,7 @@ export const styles = {
   //   lines: how many
   grid: ctx => [
     ...styles.lines(ctx),
-    ...times(ctx.count, t => loop(ctx.ring({ t }), ctx.color(t))),
+    ...ctx.layers.map(t => loop(ctx.ring({ t }), ctx.color(t))),
   ],
 
   // short arcs scattered all over (4)
@@ -30,8 +31,9 @@ export const styles = {
   fragmented: ctx => {
     const { fragmentsPerLayer, length } = ctx.settings
     const { random } = ctx
-    return times(Math.round(fragmentsPerLayer * ctx.count), i => {
-      const size = random.rnd(ctx.minSize / 2, ctx.outer)
+    return times(Math.round(fragmentsPerLayer * (ctx.single ? 1 : ctx.count)), i => {
+      // (all on the outermost, as a single layer)
+      const size = ctx.single ? ctx.outer : random.rnd(ctx.minSize / 2, ctx.outer)
       return line(ctx.ring({ t: ctx.tAt(size), size, span: random.within(length), start: random.rnd() }), ctx.color(i))
     })
   },
@@ -40,6 +42,8 @@ export const styles = {
   //   spirals: how many
   //   turns: how many times each one goes around
   spiral: ctx => {
+    // (with a single layer, there's nothing to run between)
+    if (ctx.single) return []
     const { spirals, turns } = ctx.settings
     const { random } = ctx
     return times(spirals, i => {
@@ -181,7 +185,8 @@ export const styles = {
     // don't swing in past floor
     const first = sizeReaching(ctx.outer)
     const layers = [{ size: first, n: swingsAt(first, 0) }]
-    while (layers.length < 100) {
+    // (just the outermost, as a single layer)
+    while (!ctx.single && layers.length < 100) {
       const next = nextIn(layers.at(-1), layers.length - 1)
       if (next.size - swingAt(next.size) < floor * unit) break
       layers.push(next)
@@ -192,7 +197,9 @@ export const styles = {
       const ringAt = s => ctx.ring({ t: ctx.tAt(s), size: s, points: 2 * n, start })
       const ins = ringAt(max(floor * unit, size - swing))
       const outs = ringAt(size + swing)
-      const points = ins.length && outs.length ? outs.map((p, j) => j % 2 ? p : ins[j]) : []
+      const swung = ins.length && outs.length ? outs.map((p, j) => j % 2 ? p : ins[j]) : []
+      // curving, every point swings out (or in) from the layer's own line only as far as the curve amplitude says there
+      const points = ctx.curving && swung.length ? curved(ctx, ringAt(size), swung, j => start + j / (2 * n)) : swung
       return loop(curveLoop(points, curve, ctx.step), ctx.color(layers.length - 1 - k))
     }))
   },
@@ -214,10 +221,10 @@ export const styles = {
   //   minFraction: the fraction of that joining the innermost pair, growing going out
   ribbons: ctx => {
     const { lines, minFraction } = ctx.settings
-    return times(ctx.count, t => {
+    return ctx.layers.map(t => {
       const stroke = ctx.color(t - t % 2)
       const ring = loop(ctx.ring({ t }), stroke)
-      if (t % 2 === 0) return [ring]
+      if (t % 2 === 0 || ctx.single) return [ring]
       const n = lines * (minFraction + (1 - minFraction) * t / max(ctx.count - 1, 1))
       return [...rungs(ctx.ring({ t: t - 1, points: n }), ctx.ring({ t, points: n }), stroke), ring]
     }).flat()
@@ -227,9 +234,9 @@ export const styles = {
   //   points: the dashes and gaps around each layer
   blocks: ctx => {
     const rings = times(ctx.count, t => ctx.ring({ t, points: ctx.settings.points }))
-    return rings.flatMap((ring, t) => [
-      ...dashes(ring, ctx.color(t)),
-      ...(t % 2 ? rungs(ring, rings[t - 1], ctx.color(t)) : []),
+    return ctx.layers.flatMap(t => [
+      ...dashes(rings[t], ctx.color(t)),
+      ...(t % 2 && !ctx.single ? rungs(rings[t], rings[t - 1], ctx.color(t)) : []),
     ])
   },
 
@@ -237,7 +244,7 @@ export const styles = {
   //   points, pointsPerLayer: the dashes and gaps around the innermost layer, and how many more each layer out gets
   dashed: ctx => {
     const { points, pointsPerLayer } = ctx.settings
-    return times(ctx.count, t => dashes(ctx.ring({ t, points: points + t * pointsPerLayer }), ctx.color(t))).flat()
+    return ctx.layers.map(t => dashes(ctx.ring({ t, points: points + t * pointsPerLayer }), ctx.color(t))).flat()
   },
 
   // waves, with circles along the layers in between (15)
@@ -249,7 +256,7 @@ export const styles = {
     const { circlePoints, circlesPerLayer, radius, skipOuter } = ctx.settings
     return [
       ...waves(ctx),
-      ...times(max(ctx.count - skipOuter, 0), t => ctx.ring({ t, points: circlePoints + t * circlesPerLayer })
+      ...ctx.layers.filter(t => t < ctx.count - skipOuter).map(t => ctx.ring({ t, points: circlePoints + t * circlesPerLayer })
         .map(p => loop(circle(p, radius * ctx.spacing), ctx.color(t)))).flat(),
     ]
   },
@@ -259,7 +266,7 @@ export const styles = {
   //   ringEvery: how many layers apart the rings are
   wavyRibbons: ctx => [
     ...waves(ctx),
-    ...times(ctx.count, t => t % ctx.settings.ringEvery ? [] : [loop(ctx.ring({ t }), ctx.color(t))]).flat(),
+    ...ctx.layers.map(t => t % ctx.settings.ringEvery ? [] : [loop(ctx.ring({ t }), ctx.color(t))]).flat(),
   ],
 
   // a short horizontal line at points around every layer (17)
@@ -268,12 +275,173 @@ export const styles = {
   horizontalDashes: ctx => {
     const { points, pointsPerLayer, length } = ctx.settings
     const half = length * ctx.spacing / 2
-    return times(ctx.count, t => ctx.ring({ t, points: points + t * pointsPerLayer })
+    return ctx.layers.map(t => ctx.ring({ t, points: points + t * pointsPerLayer })
       .map(([x, y]) => line([[x - half, y], [x + half, y]], ctx.color(t)))).flat()
   },
 
-  // just the outermost layer (18)
-  single: ctx => [loop(ctx.ring({ t: ctx.count - 1 }), ctx.color(ctx.count - 1))],
+
+  // ---------------------------------------------------------------------------------------------------- experimental
+
+  // every layer twice, the second with every gear moved on by shift of one of its swings, so the two interfere (half
+  // a swing keeps the rosette's symmetry)
+  //   shift: how far on, in swings
+  moire: ctx => {
+    const shifted = ctx.gears.map(g => ({ ...g, phase: g.phase + ctx.settings.shift / max(1, Math.abs(g.rotation)) }))
+    return ctx.layers.map(t => [
+      loop(ctx.ring({ t }), ctx.color(t)),
+      loop(ctx.ring({ t, gears: shifted }), ctx.color(t)),
+    ]).flat()
+  },
+
+  // every layer as a zigzag, its points alternating between the layer and a little inside it
+  //   points, pointsPerLayer: points around the innermost layer, and how many more each layer out gets
+  //   depth: how far in the inner points sit, in spacings
+  zigzag: ctx => {
+    const { points, pointsPerLayer, depth } = ctx.settings
+    return ctx.layers.map(t => {
+      const n = max(4, 2 * Math.round((points + t * pointsPerLayer) / 2))
+      const deep = depth * ctx.spacing / ctx.sizes[t]
+      return loop(ctx.ring({ t, points: n, baseScale: i => i % 2 ? 1 : max(0, 1 - deep * ctx.curveAt(i / n)) }), ctx.color(t))
+    })
+  },
+
+  // a net of diagonal lines, each point on a layer joined to the points either side of it on the next layer out
+  //   lines: points around every layer
+  lattice: ctx => {
+    // (with a single layer, there's nothing to run between)
+    if (ctx.single) return []
+    const rings = ctx.layers.map(t => ctx.ring({ t, points: ctx.settings.lines }))
+    return rings.slice(0, -1).flatMap((inner, t) => {
+      const outer = rings[t + 1]
+      const n = outer.length
+      return inner.flatMap((p, i) => [
+        line([p, outer[(i + 1) % n]], ctx.color(t)),
+        line([p, outer[(i - 1 + n) % n]], ctx.color(t)),
+      ])
+    })
+  },
+
+  // short marks across every layer, pointing out from the center, like a dial's markings
+  //   points, pointsPerLayer: marks around the innermost layer, and how many more each layer out gets
+  //   length: of each mark, in spacings
+  ticks: ctx => {
+    const { points, pointsPerLayer, length } = ctx.settings
+    const half = length * ctx.spacing / 2
+    return ctx.layers.map(t => {
+      const n = Math.round(points + t * pointsPerLayer)
+      const size = ctx.sizes[t]
+      const inner = ctx.ring({ t, size: max(size / 10, size - half), points: n })
+      const outer = ctx.ring({ t, size: size + half, points: n })
+      if (!ctx.curving) return rungs(inner, outer, ctx.color(t))
+      // curving, every mark reaches either side of the layer only as far as the curve amplitude says there
+      const middle = ctx.ring({ t, points: n })
+      return rungs(curved(ctx, middle, inner, i => i / n), curved(ctx, middle, outer, i => i / n), ctx.color(t))
+    }).flat()
+  },
+
+  // every layer as a run of little curls, from a small fast gear of its own riding on the rest
+  //   wavelength: how far apart the curls are, around the layer, in spacings
+  //   radius: how big they are, in spacings
+  loops: ctx => {
+    const { wavelength, radius } = ctx.settings
+    return ctx.layers.map(t => {
+      const size = ctx.sizes[t]
+      const curls = max(3, Math.round(TWO_PI * size / (wavelength * ctx.spacing)))
+      const curl = { rotation: curls, radia: radius * ctx.spacing / size, phase: 0 }
+      const points = max(900, curls * 16)
+      const curled = ctx.ring({ t, points, gears: [...ctx.gears, curl] })
+      // curving, every curl's as big as the curve amplitude says there
+      return loop(ctx.curving ? curved(ctx, ctx.ring({ t, points }), curled, i => i / points) : curled, ctx.color(t))
+    })
+  },
+
+  // every layer as two lines close together
+  //   gap: between them, in spacings
+  doubled: ctx => ctx.layers.map(t => [-1, 1].map(side =>
+    loop(ctx.ring({ t, size: max(0.01, ctx.sizes[t] + side * ctx.settings.gap * ctx.spacing / 2) }), ctx.color(t))
+  )).flat(),
+
+  // one line winding out from the innermost layer to the outermost, a turn per layer
+  //   points: around each turn
+  coil: ctx => {
+    // (with a single layer, there's nothing to run between)
+    if (ctx.single) return []
+    const n = ctx.settings.points
+    const rings = ctx.layers.map(t => ctx.ring({ t, points: n }))
+    return rings.slice(0, -1).map((inner, t) => {
+      const outer = rings[t + 1]
+      return line([...inner.map(([x, y], i) => [x + (outer[i][0] - x) * i / n, y + (outer[i][1] - y) * i / n]), outer[0]], ctx.color(t))
+    })
+  },
+}
+
+// Radial density: how much a style draws going around the center, as opposed to density (how close its layers are,
+// going out from it). For each style, the settings that count something around each layer (as a power: 1 goes up
+// with radial density, -1 goes down) -- lines and spokes, waves and swings, bumps, dashes, shapes, arcs, spiral arms.
+// standard is plain rings, with nothing to count around them, so radial density leaves it be (and so
+// are moire, doubled, and coil, however they're drawn)
+const waveCounts = { points: 1, pointsPerFourLayers: 1, pointsPerLayer: 1 }
+export const radialCounts = {
+  lines: { lines: 1 },
+  grid: { lines: 1 },
+  fragmented: { fragmentsPerLayer: 1 },
+  spiral: { spirals: 1 },
+  outwardSpikes: { points: 1, pointsPerLayer: 1 },
+  inwardSpikes: { points: 1, pointsPerLayer: 1 },
+  wavy: waveCounts,
+  wavyRibbons: waveCounts,
+  mixed: { ...waveCounts, circlePoints: 1, circlesPerLayer: 1 },
+  // the swings, and how many fewer each layer in gets. the narrowest a swing can get shrinks as they go up, so they
+  // aren't capped where they were
+  numismatic: { oscillations: 1, oscillationsPerLayer: 1, minWavelength: -1 },
+  circles: { points: 1, pointsPerLayer: 1 },
+  heterocircles: { points: 1, pointsPerLayer: 1 },
+  ribbons: { lines: 1 },
+  blocks: { points: 1 },
+  dashed: { points: 1, pointsPerLayer: 1 },
+  horizontalDashes: { points: 1, pointsPerLayer: 1 },
+  zigzag: { points: 1, pointsPerLayer: 1 },
+  lattice: { lines: 1 },
+  ticks: { points: 1, pointsPerLayer: 1 },
+  loops: { wavelength: -1 },
+}
+
+// Wave amplitude: how high a style's waves swing, its bumps and spikes stick out, and so on. For each style, how each
+// setting that sets a height changes with it (a: 1 leaves it as it is, 2 swings twice as far, 0 flattens it). outward
+// spikes dip in to depth of their size, so it's how far short of 1 that is that grows. styles with nothing that swings
+// are left be
+const scaled = (value, a) => value * a
+const waveHeights = {
+  numismatic: { amplitude: scaled, minAmplitude: scaled },
+  wavy: { amplitude: scaled },
+  wavyRibbons: { amplitude: scaled },
+  mixed: { amplitude: scaled },
+  inwardSpikes: { bulge: scaled },
+  outwardSpikes: { depth: (depth, a) => Math.max(0, 1 - (1 - depth) * a) },
+  zigzag: { depth: scaled },
+  loops: { radius: scaled },
+  ticks: { length: scaled },
+}
+
+// A style's settings at a wave amplitude (1 leaves them as they are)
+export function atWaveAmplitude(style, settings, waveAmplitude=1) {
+  if (waveAmplitude === 1 || !waveHeights[style]) return settings
+  const changed = { ...settings }
+  for (const [key, change] of Object.entries(waveHeights[style])) {
+    if (typeof changed[key] === 'number') changed[key] = change(changed[key], waveAmplitude)
+  }
+  return changed
+}
+
+// A style's settings at a radial density (1 leaves them as they are). the spirals are whole ones, and at least one
+export function atRadialDensity(style, settings, radialDensity=1) {
+  if (radialDensity === 1 || !radialCounts[style]) return settings
+  const scaled = { ...settings }
+  for (const [key, power] of Object.entries(radialCounts[style])) {
+    if (typeof scaled[key] === 'number') scaled[key] *= radialDensity ** power
+  }
+  if (style === 'spiral') scaled.spirals = max(1, Math.round(scaled.spirals))
+  return scaled
 }
 
 // Lines out through the outer layers, between two rings on every gear's radia shifted down by radiaShift (the base
@@ -289,6 +457,15 @@ export function auraStrokes(ctx, { from, to, lines, radiaShift }) {
 }
 
 const loop = (points, stroke) => ({ points, closed: true, stroke })
+
+// points reaching as far off the layer's own line as the curve amplitude says (see curveAt in rosette.js): each as far
+// from its match on the line (plain, matched point for point) as it'd be, times the curve amplitude progressOf(i) of the
+// way around
+const curved = (ctx, plain, points, progressOf) => points.map(([x, y], i) => {
+  const [px, py] = plain[i] ?? [x, y]
+  const reach = ctx.curveAt(progressOf(i))
+  return [px + (x - px) * reach, py + (y - py) * reach]
+})
 const line = (points, stroke) => ({ points, closed: false, stroke })
 
 // lines from each of from's points to the matching one of to's
@@ -310,6 +487,8 @@ function tinyRosette([x, y], r, gears, points=120) {
   ))
 }
 
+// (every layer's shapes are made, even with a single layer, so its random picks come out as they would with the rest,
+// and just the ones it draws are kept)
 function shapes(ctx) {
   const { shape, radius, points, pointsPerLayer, pointMult, symbolRadius, symbolGears } = ctx.settings
   return times(ctx.count, t => {
@@ -321,7 +500,7 @@ function shapes(ctx) {
         : circle(p, r),
       ctx.color(t)
     ))
-  }).flat()
+  }).filter((_, t) => ctx.layers.includes(t)).flat()
 }
 
 function waves(ctx) {
@@ -342,16 +521,19 @@ function waves(ctx) {
 
 // Rings of quadratic curves, one per size: the points around each one alternate between control points (even) and
 // points on the curve (odd), and control(size, i) says how far a control point is from the center, which bows the
-// curve in or out between the points on either side. period is how many points the pattern takes to repeat, and
-// repeats copies of each ring are spread across one period
+// curve in or out between the points on either side, as far as the curve amplitude says there (see curveAt in rosette.js). period
+// is how many points the pattern takes to repeat, and repeats copies of each ring are spread across one period
 function curveRings(ctx, { sizes, points, pointsPerLayer, period, repeats=1, control, floor=0 }) {
   return sizes.flatMap((size, i) => {
+    // (with a single layer, just the outermost)
+    if (ctx.single && i < sizes.length - 1) return []
     const n = max(period, Math.round((points + i * pointsPerLayer) / period) * period)
-    const baseScale = p => p % 2 ? 1 : max(floor, control(size, p)) / size
-    return times(repeats, r => loop(
-      quadraticLoop(ctx.ring({ t: ctx.tAt(size), size, points: n, start: r / repeats * period / n, baseScale })),
-      ctx.color(i)
-    ))
+    return times(repeats, r => {
+      const start = r / repeats * period / n
+      // each control point bows the curve out (or in) from the ring as far as the curve amplitude says there
+      const baseScale = p => p % 2 ? 1 : max(floor, size + (control(size, p) - size) * ctx.curveAt(start + p / n)) / size
+      return loop(quadraticLoop(ctx.ring({ t: ctx.tAt(size), size, points: n, start, baseScale })), ctx.color(i))
+    })
   })
 }
 

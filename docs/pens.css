@@ -1,0 +1,377 @@
+/* the consoles' shared controls (the pens, see pens.js, and the sections, see sections.js), for the pages that
+   don't style them themselves */
+
+/* the palette: how many pens, then a pen to a row, with its handle, letter, color, and thickness */
+#controls .palette,
+#controls .pens {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+#controls .stepper,
+#controls .pen {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #777;
+}
+
+#controls .stepper b {
+  min-width: 1.5ch;
+  text-align: center;
+}
+
+#controls .stepper button {
+  width: 2em;
+  padding: 2px 0;
+}
+
+#controls button:disabled {
+  cursor: default;
+  color: #bbb;
+  border-color: #ddd;
+}
+
+#controls .pen .handle {
+  cursor: grab;
+  user-select: none;
+  padding: 0 2px;
+}
+
+#controls .pen.dragging {
+  opacity: 0.4;
+}
+
+#controls .pen.over {
+  outline: 1px dashed #777;
+  outline-offset: 2px;
+}
+
+/* a pen's color: its swatch and name, and a menu of all of them under it */
+#controls .picker {
+  position: relative;
+}
+
+#controls .picker button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 9em;
+  text-align: left;
+  align-self: stretch;
+  color: #222;
+}
+
+#controls .swatch {
+  display: inline-block;
+  flex: none;
+  width: 1em;
+  height: 1em;
+  border: 1px solid #0003;
+}
+
+#controls .picker .list {
+  position: absolute;
+  z-index: 1;
+  top: 100%;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid #999;
+  box-shadow: 0 2px 8px #0003;
+}
+
+#controls .picker .list[hidden] {
+  display: none;
+}
+
+#controls .picker .list button {
+  border: none;
+}
+
+#controls .picker .list button.on {
+  background: #eee;
+}
+
+#controls input[type="number"] {
+  width: 6em;
+  font: inherit;
+  padding: 4px 6px;
+  border: 1px solid #999;
+}
+
+/* the console's sections (see sections.js): the drawing, the paper, and the pens, then the layout's own */
+#controls .section {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  gap: 16px 24px;
+  padding-right: 24px;
+  border-right: 1px solid #ddd;
+}
+
+#controls .section > h1 {
+  width: 100%;
+  margin: 0;
+  font: inherit;
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #777;
+}
+
+#controls .section.layout {
+  padding: 12px;
+  border-right: none;
+  background: #f4f4f1;
+}
+
+/* a coloring: a pattern and an order of pens, side by side (see colorRules.js) */
+#controls .coloring {
+  display: flex;
+  gap: 6px;
+}
+
+#controls .coloring input[type="text"] {
+  width: 5em;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* a card's colors, set apart at the bottom of it */
+#controls .piece .colors {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px dashed #bbb;
+}
+
+#controls .piece .colors > h3 {
+  margin: 0;
+  font: inherit;
+  font-size: 11px;
+  color: #777;
+}
+
+/* the rosette grid's colorings: a row each, with buttons to shuffle and delete it */
+#controls .colorings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+#controls .coloring input.weight {
+  width: 3.5em;
+}
+
+#controls .coloring button.shuffle,
+#controls .coloring button.remove {
+  padding: 2px 8px;
+}
+
+/* the row for every pen's thickness at once, its box under theirs */
+#controls .pen.all {
+  padding-top: 6px;
+  border-top: 1px dashed #bbb;
+}
+
+#controls .pen.all .handle {
+  visibility: hidden;
+}
+
+#controls .pen.all .every {
+  width: calc(9em - 1px);
+  padding: 0 7px;
+  box-sizing: border-box;
+  font-style: italic;
+}
+
+/* the history: back and forward, then every change, section by section, the ones gone back past dimmed */
+#controls .history .changes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+#controls .history .section-changes {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+#controls .history h3 {
+  margin: 0 0 2px;
+  font: inherit;
+  font-size: 11px;
+  color: #777;
+}
+
+#controls .history .change {
+  align-self: stretch;
+  text-align: left;
+  border: none;
+  padding: 2px 6px;
+  background: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#controls .history .change.current {
+  outline: 1px solid #999;
+}
+
+#controls .history .change.undone {
+  opacity: 0.4;
+}
+
+#controls .history .empty {
+  color: #777;
+}
+
+/* a line between runs of controls */
+#controls hr.divider {
+  width: 100%;
+  margin: 10px 0;
+  border: none;
+  height: 3px;
+  border-top: 1px solid #999;
+  border-bottom: 1px solid #999;
+}
+
+/* a setting's two sliders, one above the other: a range (two knobs, the stretch between them filled in, the value
+   picked for the drawing in gray beside it) and an exact value (one knob). the one in use is blue, the other gray */
+#controls .range {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  color: #777;
+}
+
+#controls .range > span {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+#controls .range .picked {
+  color: #777;
+  font-style: normal;
+}
+
+#controls .range .dual {
+  position: relative;
+  height: 16px;
+  cursor: pointer;
+}
+
+#controls .range .dual::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 7px;
+  height: 2px;
+  background: #ccc;
+}
+
+#controls .range .dual .fill {
+  position: absolute;
+  top: 6px;
+  height: 4px;
+  background: #a8a8a8;
+}
+
+#controls .range .dual.active .fill {
+  background: #2f6fed;
+}
+
+#controls .range .dual input[type="range"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 16px;
+  margin: 0;
+  background: none;
+  pointer-events: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+#controls .range .dual input[type="range"]::-webkit-slider-runnable-track {
+  height: 16px;
+  background: none;
+}
+
+#controls .range .dual input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: 2px;
+  border-radius: 50%;
+  background: #a8a8a8;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+#controls .range .dual input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: none;
+  border-radius: 50%;
+  background: #a8a8a8;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+#controls .range .dual.active input[type="range"]::-webkit-slider-thumb {
+  background: #2f6fed;
+}
+
+#controls .range .dual.active input[type="range"]::-moz-range-thumb {
+  background: #2f6fed;
+}
+
+/* a setting's reset: a small button at the right end of its row, putting it back to its default */
+#controls label > span,
+#controls .range > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#controls label > span > b,
+#controls .range > span > b {
+  margin-left: auto;
+}
+
+#controls label.toggle > span {
+  flex: 1;
+}
+
+#controls button.reset {
+  margin-left: auto;
+  padding: 0 4px;
+  border: none;
+  background: none;
+  color: #777;
+  font-size: 12px;
+  line-height: 1;
+  opacity: 0.5;
+}
+
+#controls b + button.reset {
+  margin-left: 2px;
+}
+
+#controls button.reset:hover {
+  opacity: 1;
+  color: #222;
+}

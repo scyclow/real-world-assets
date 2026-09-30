@@ -26,7 +26,8 @@ export function sdfBase(sdf, options) {
 
 export const circleGear = r => progress => getXYRotation(progress * TWO_PI, r)
 
-export function superellipseGear(hw, hh, exponent=8, samples=8000) {
+// samples is how many points trace it: about ten per unit along its edge by default, at least 512 and at most 8000
+export function superellipseGear(hw, hh, exponent=8, samples=Math.min(8000, Math.max(512, Math.ceil(40 * (hw + hh))))) {
   const e = 2 / exponent
   return arcLengthGear(times(samples, i => {
     const a = TWO_PI * i / samples

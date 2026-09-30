@@ -1,3 +1,5 @@
+import { strokePath } from './clip.js'
+
 // Letterforms for plotting, ported from the chars in rosettes/docs/svg2.js: each one is [path, width, yOffset] in a
 // glyph space about 65 across and 58 tall, drawn as lines rather than filled outlines. Another typeface (ASSET, say)
 // drops in the same way: its glyphs as path data on the same scale
@@ -70,15 +72,85 @@ export function textBox(str, { x, y, size=0.1, align='left', font=plotter }) {
 // Draws str on an Svg (see svg.js), one path per letter, scaled by size and moved into place. Everything else (stroke,
 // strokeWidth, strokeOpacity) is passed along to the paths. strokeWidth is in the drawing's units, like every other
 // path's: the scale would shrink it along with the letters, so it's scaled back up to match
-export function drawText(svg, str, { x, y, size=0.1, align='left', font=plotter, strokeWidth=1, ...args }) {
+// clip (a signed distance function, see sdf.js) cuts the letters off where they leave it, for any glyph glyphLines can
+// follow (the rest are drawn whole)
+export function drawText(svg, str, { x, y, size=0.1, align='left', font=plotter, strokeWidth=1, clip=null, ...args }) {
   let left = textBox(str, { x, y, size, align, font }).left
   str.split('').forEach(c => {
     const [d, width, yOffset] = glyph(font, c)
     // a glyph that only moves the pen (a space is just 'M0 0') is skipped, or a plotter puts a dot down where it lands
     if (/[LHVCSQTAZ]/i.test(d)) {
-      svg.path(d, { ...args, strokeWidth: strokeWidth / size,
-                    transform: `translate(${left} ${y + yOffset * size}) scale(${size})` })
+      const lines = clip && glyphLines(d)
+      if (lines) {
+        // moved into place and scaled here instead of by a transform, so the clip is in the drawing's own units
+        const top = y + yOffset * size
+        for (const { points, closed } of lines) {
+          const placed = points.map(([px, py]) => [left + px * size, top + py * size])
+          const path = strokePath(placed, { closed, clip, step: 0.25 })
+          if (path) svg.path(path, { ...args, strokeWidth })
+        }
+      } else {
+        svg.path(d, { ...args, strokeWidth: strokeWidth / size,
+                      transform: `translate(${left} ${y + yOffset * size}) scale(${size})` })
+      }
     }
     left += width * size
   })
+}
+
+// A glyph's path data as lines: { points, closed } for each of its subpaths, with curves cut into segments straight
+// pieces. Follows moves, lines and cubic curves (absolute or relative), and returns null for anything else (arcs,
+// smooth or quadratic curves)
+export function glyphLines(d, segments=8) {
+  const tokens = d.match(/[a-zA-Z]|-?(?:\d*\.\d+|\d+\.?)(?:e[-+]?\d+)?/g) ?? []
+  const argCounts = { M: 2, L: 2, H: 1, V: 1, C: 6, Z: 0 }
+  const runs = []
+  let run = null
+  let pos = [0, 0]
+  let start = [0, 0]
+  let command = null
+  let i = 0
+  while (i < tokens.length) {
+    if (/[a-zA-Z]/.test(tokens[i])) command = tokens[i++]
+    const upper = command?.toUpperCase()
+    if (!(upper in argCounts)) return null
+    const relative = command !== upper
+    if (upper === 'Z') {
+      if (run) run.closed = true
+      pos = start
+      run = null
+      continue
+    }
+    const args = tokens.slice(i, i + argCounts[upper]).map(Number)
+    if (args.length < argCounts[upper] || args.some(isNaN)) return null
+    i += argCounts[upper]
+    const at = ([ax, ay]) => relative ? [pos[0] + ax, pos[1] + ay] : [ax, ay]
+
+    if (upper === 'M') {
+      pos = start = at(args)
+      run = { points: [pos], closed: false }
+      runs.push(run)
+      // more pairs after a move are lines
+      command = relative ? 'l' : 'L'
+      continue
+    }
+    if (!run) {
+      run = { points: [pos], closed: false }
+      runs.push(run)
+    }
+    if (upper === 'L') pos = at(args)
+    if (upper === 'H') pos = [relative ? pos[0] + args[0] : args[0], pos[1]]
+    if (upper === 'V') pos = [pos[0], relative ? pos[1] + args[0] : args[0]]
+    if (upper === 'C') {
+      const [p0, p1, p2, p3] = [pos, at(args.slice(0, 2)), at(args.slice(2, 4)), at(args.slice(4, 6))]
+      for (let k = 1; k < segments; k++) {
+        const t = k / segments
+        const u = 1 - t
+        run.points.push([0, 1].map(j => u**3 * p0[j] + 3 * u**2 * t * p1[j] + 3 * u * t**2 * p2[j] + t**3 * p3[j]))
+      }
+      pos = p3
+    }
+    run.points.push(pos)
+  }
+  return runs.filter(({ points }) => points.length > 1)
 }

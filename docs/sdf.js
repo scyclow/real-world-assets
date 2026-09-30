@@ -45,6 +45,16 @@ export function closerToSdf([ax, ay], others) {
   }))
 }
 
+// A circle of radius ra around center's share of the space, against other circles ([x, y, r]): everywhere that's
+// further inside its edge than inside any other's. Each border between two is where rings the same distance in from
+// either edge cross (a hyperbola, or halfway between them when the radii match), so rosettes of different sizes still
+// meet ring for ring at their seams, and two that don't reach each other are never cut. Only roughly a distance away
+// from the edge, but exact on it
+export function blendCellSdf([ax, ay], ra, others) {
+  return (x, y) => max(...others.map(([bx, by, rb]) =>
+    ((hypot(x - ax, y - ay) - ra) - (hypot(x - bx, y - by) - rb)) / 2))
+}
+
 // The outer edge of a cloud of points around the origin: how far out they reach in each direction, so any curls are
 // filled in. sdf(center, grow) and edge(grow) place it at center, grown outward by grow. Growing keeps every point at
 // least grow inside the edge measured straight across, not just along the line out from the center, so it stays
@@ -87,10 +97,12 @@ export function radialEnvelope(points, bins=720) {
     }
 
     const reach = Array(bins).fill(0)
-    // steps along the edge, close enough together that the circles around them overlap into a smooth band. each one
+    // steps along the edge, close enough together that the circles around them overlap into a smooth band (but no
+    // closer than half a bin apart at that distance out, which is as fine as the bins can tell apart anyway). each one
     // pushes out only the bins whose center lines pass within grow of it
     edge.forEach(([[x0, y0], [x1, y1]]) => {
-      const steps = Math.ceil(hypot(x1 - x0, y1 - y0) / (grow / 8)) || 1
+      const step = max(grow / 8, hypot(x0, y0) * PI / bins)
+      const steps = Math.ceil(hypot(x1 - x0, y1 - y0) / step) || 1
       for (let s = 0; s < steps; s++) {
         const x = x0 + (x1 - x0) * s / steps
         const y = y0 + (y1 - y0) * s / steps
@@ -137,6 +149,20 @@ export const growSdf = (shape, d) => (x, y) => shape(x, y) - d
 
 // Inside any of the shapes
 export const unionSdf = (...shapes) => (x, y) => min(...shapes.map(shape => shape(x, y)))
+
+// The same, for shapes that each know how far they reach (shape.bounds = { center, reach }, as rosetteSdf's do): only
+// the ones that could be closer than the closest so far get measured, which is much faster over many shapes spread
+// apart (a ring of medallions, say)
+export function boundedUnionSdf(shapes) {
+  return (x, y) => {
+    let closest = Infinity
+    for (const shape of shapes) {
+      const { center: [cx, cy], reach } = shape.bounds
+      if (hypot(x - cx, y - cy) - reach < closest) closest = min(closest, shape(x, y))
+    }
+    return closest
+  }
+}
 
 // Inside all of the shapes
 export const intersectSdf = (...shapes) => (x, y) => max(...shapes.map(shape => shape(x, y)))

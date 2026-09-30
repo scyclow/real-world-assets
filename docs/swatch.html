@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>rosette note</title>
+  <title>rosette swatch</title>
   <link rel="stylesheet" href="./pens.css">
   <style>
     body {
@@ -21,22 +21,23 @@
       color: #222;
     }
 
-    #note {
-      width: min(95vw, 1100px);
+    #swatch {
+      height: 75vh;
+      aspect-ratio: 60 / 100;
       display: flex;
     }
 
     #controls {
       display: flex;
       flex-wrap: wrap;
-      align-items: start;
+      align-items: end;
       gap: 24px;
       padding: 12px 16px;
       background: #fff;
       border: 1px solid #bbb;
     }
 
-    /* one column per piece of the note */
+    /* unused here: the controls are one row of fields */
     #controls .piece {
       display: flex;
       flex-direction: column;
@@ -90,7 +91,7 @@
       align-self: center;
     }
 
-    /* the presets' save and delete, side by side */
+    /* the presets' save and delete, and refresh and reset, side by side */
     #controls .buttons {
       display: flex;
       gap: 6px;
@@ -108,14 +109,14 @@
   </style>
 </head>
 <body>
-  <div id="note"></div>
+  <div id="swatch"></div>
   <div id="controls"></div>
   <div id="hash"></div>
   <script type="module">
-    import { mount } from './billConsole.js'
+    import { mount } from './swatchConsole.js'
 
     mount({
-      $art: document.getElementById('note'),
+      $art: document.getElementById('swatch'),
       $controls: document.getElementById('controls'),
       $hash: document.getElementById('hash'),
     })

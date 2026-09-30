@@ -11,7 +11,8 @@ export class Svg {
     this.h = height
     this.pens = new Map()
     this.el = this.create('svg', { viewBox: `0 0 ${width} ${height}` })
-    this.el.setAttribute('style', `background: ${background}; width: ${displayWidth}`)
+    // --ratio is its proportions, for a page to size it by (keeping to them however it's fitted in)
+    this.el.setAttribute('style', `background: ${background}; width: ${displayWidth}; --ratio: ${width / height}`)
     // marks the document bounds, so plotting software keeps the whole canvas
     this.el.append(this.create('path', { d: `M 0 0 M ${width} ${height}` }))
   }

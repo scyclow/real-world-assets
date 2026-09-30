@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>rosette grid</title>
+  <link rel="stylesheet" href="./pens.css">
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding: 24px;
+      box-sizing: border-box;
+      background: #ddd;
+      font: 13px/1.4 ui-monospace, Menlo, monospace;
+      color: #222;
+    }
+
+    /* the sheet fits the window whichever way round it is */
+    #sheet {
+      width: min(95vw, 1100px);
+      height: 70vh;
+      justify-content: center;
+      display: flex;
+    }
+
+    #controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: start;
+      gap: 24px;
+      padding: 12px 16px;
+      background: #fff;
+      border: 1px solid #bbb;
+    }
+
+    /* one column per piece of the note */
+    #controls .piece {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    #controls h2 {
+      margin: 0;
+      font: inherit;
+      font-weight: bold;
+    }
+
+    #controls label {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      color: #777;
+    }
+
+    #controls label.toggle {
+      flex-direction: row;
+      align-items: center;
+      gap: 6px;
+    }
+
+    #controls [hidden] {
+      display: none;
+    }
+
+    #controls b {
+      color: #222;
+      font-weight: normal;
+    }
+
+    #controls input[type="range"] {
+      width: 100%;
+      margin: 0;
+    }
+
+    #controls select,
+    #controls input[type="text"],
+    #controls button {
+      font: inherit;
+      padding: 4px 6px;
+      background: #fff;
+      border: 1px solid #999;
+    }
+
+    #controls button {
+      cursor: pointer;
+      align-self: center;
+    }
+
+    /* the palette: how many pens, then a pen to a row, with its handle, letter, color, and thickness */
+    #controls .palette,
+    #controls .pens {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    #controls .stepper,
+    #controls .pen {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #777;
+    }
+
+    #controls .stepper b {
+      min-width: 1.5ch;
+      text-align: center;
+    }
+
+    #controls .stepper button {
+      width: 2em;
+      padding: 2px 0;
+    }
+
+    #controls button:disabled {
+      cursor: default;
+      color: #bbb;
+      border-color: #ddd;
+    }
+
+    #controls .pen .handle {
+      cursor: grab;
+      user-select: none;
+      padding: 0 2px;
+    }
+
+    #controls .pen.dragging {
+      opacity: 0.4;
+    }
+
+    #controls .pen.over {
+      outline: 1px dashed #777;
+      outline-offset: 2px;
+    }
+
+    /* a pen's color: its swatch and name, and a menu of all of them under it */
+    #controls .picker {
+      position: relative;
+    }
+
+    #controls .picker button {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      width: 9em;
+      text-align: left;
+      align-self: stretch;
+      color: #222;
+    }
+
+    #controls .swatch {
+      display: inline-block;
+      flex: none;
+      width: 1em;
+      height: 1em;
+      border: 1px solid #0003;
+    }
+
+    #controls .picker .list {
+      position: absolute;
+      z-index: 1;
+      top: 100%;
+      left: 0;
+      display: flex;
+      flex-direction: column;
+      background: #fff;
+      border: 1px solid #999;
+      box-shadow: 0 2px 8px #0003;
+    }
+
+    #controls .picker .list[hidden] {
+      display: none;
+    }
+
+    #controls .picker .list button {
+      border: none;
+    }
+
+    #controls .picker .list button.on {
+      background: #eee;
+    }
+
+    #controls input[type="number"] {
+      width: 6em;
+      font: inherit;
+      padding: 4px 6px;
+      border: 1px solid #999;
+    }
+
+    /* the presets' save and delete, side by side */
+    #controls .buttons {
+      display: flex;
+      gap: 6px;
+    }
+
+    #controls button:hover {
+      background: #eee;
+    }
+
+    #hash {
+      color: #777;
+      word-break: break-all;
+      max-width: 60ch;
+    }
+  </style>
+</head>
+<body>
+  <div id="sheet"></div>
+  <div id="controls"></div>
+  <div id="hash"></div>
+  <script type="module">
+    import { mount } from './rosetteGridConsole.js'
+
+    mount({
+      $art: document.getElementById('sheet'),
+      $controls: document.getElementById('controls'),
+      $hash: document.getElementById('hash'),
+    })
+  </script>
+</body>
+</html>
