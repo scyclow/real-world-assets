@@ -42,10 +42,14 @@ const frame = {
   padding: 2.5,
 }
 
-// the two patterns of repeated rosettes: a coarser one in the frame's bands, a finer one across the note
+// the two patterns of repeated rosettes: a coarser one in the frame's bands, a finer one across the note.
+// radiaChange (u, v) is how far the gears' radia shift in a cell's rings inside its edge, by where the cell is across
+// (u) and down (v) the grid, both 0-1. the rings that reach the cell's edge never change, so the cells still meet at
+// the seams; the shift grows from none there to all of it at the center. the field's goes from none in the top left
+// to the most in the bottom right
 const patterns = {
   border: { columns: 8, rows: 3, spacing: 1.7 },
-  field: { columns: 7, rows: 4, spacing: 1.5 },
+  field: { columns: 7, rows: 4, spacing: 1.5, radiaChange: (u, v) => 0 },
 }
 
 // the seal left of center and the emblem on the right, both down in the body of the sheet so the header has the
@@ -266,7 +270,7 @@ const clear = [
 
 // one rosette repeated in every cell of a grid, each copy filling its cell, cut off at the cell's edges (so a cell's
 // lines meet its neighbors' at the seams), and clipped to whatever else is passed in
-function drawPattern({ columns, rows, spacing }, [x0, y0, x1, y1], clip, holes=[]) {
+function drawPattern({ columns, rows, spacing, radiaChange=null }, [x0, y0, x1, y1], clip, holes=[]) {
   const patternFeatures = generateFeatures({ ...features, styleChances: styleChances.pattern, palette: [bill.ink] })
   const cellW = (x1 - x0) / columns
   const cellH = (y1 - y0) / rows
@@ -277,6 +281,10 @@ function drawPattern({ columns, rows, spacing }, [x0, y0, x1, y1], clip, holes=[
   const cells = times(rows, row => times(columns, column => {
     const center = [x0 + cellW * (column + 0.5), y0 + cellH * (row + 0.5)]
     const cell = boxSdf(...center, cellW / 2, cellH / 2)
+    const change = radiaChange ? radiaChange(columns > 1 ? column / (columns - 1) : 0, rows > 1 ? row / (rows - 1) : 0) : 0
+    // the innermost layer that reaches the cell's edge, found with the gears as they are (Infinity until it's found,
+    // which leaves them alone). every layer from it out stays the same
+    let edge = Infinity
     const rosette = createRosette({
       ...shared,
       ...patternFeatures,
@@ -285,7 +293,20 @@ function drawPattern({ columns, rows, spacing }, [x0, y0, x1, y1], clip, holes=[
       spacing,
       minSize: spacing,
       // enough layers that the outermost one lies entirely outside the cell, so the rosette fills it to its edges
-      layers: fillPast(cell),
+      layers: api => {
+        const count = fillPast(cell)(api)
+        const reaches = k => api.outermost(k).some(points => points.some(([x, y]) => cell(x, y) >= 0))
+        for (let k = 1; k <= count; k++) {
+          if (reaches(k)) {
+            edge = k - 1
+            break
+          }
+        }
+        return count
+      },
+      // inside that layer, the radia shift down, more the farther in
+      gearModifier: (gears, t) => !change || edge === Infinity || t >= edge ? gears
+        : gears.map(g => ({ ...g, radia: g.radia - change * (edge - t) / max(edge, 1) })),
       clip: subtractSdf(intersectSdf(cell, clip), ...holes),
     })
     drawRosette(svg, rosette)

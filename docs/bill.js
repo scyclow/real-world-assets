@@ -6,6 +6,7 @@ import { boxSdf, intersectSdf, unionSdf, subtractSdf } from './sdf.js'
 import { generateFeatures } from './features.js'
 import { createRosette, drawRosette, rosetteSdf, fitWithin, fillPast } from './rosette.js'
 import { drawText, textBox } from './type.js'
+import { cutive, cutiveOutline } from './cutive.js'
 
 // A paper note: a rosette medallion and a seal on a guilloche field, inside a frame of rosette-pattern bands, with the
 // lettering from type.js over it. Each of those picks its own style from the hash (see styles.js). ?hash= remakes one
@@ -19,68 +20,73 @@ setSeed(hash)
 
 const bill = {
   // about banknote proportions
-  width: 156,
-  height: 66,
+  width: 195,
+  height: 82.5,
   background: '#fff',
   // a fine pen, so the patterns stay legible at how dense they are
-  strokeWidth: 0.2,
+  strokeWidth: 0.3,
   strokeOpacity: 0.9,
   // the engraving's pen, and the one for the seal and the serials
   ink: pen.black,
   accent: pen.green,
   // how far short of the note's edge the ink stops
-  margin: 4,
+  margin: 5,
 }
 
 const frame = {
   // bands of pattern around the note, each between a pair of rects, going in
-  bands: 2,
-  width: 3,
-  gap: 1.2,
+  bands: 1,
+  width: 3.75,
+  gap: 1.5,
+  // white space between the innermost band and the field
+  padding: 1.5,
 }
 
 // the two patterns of repeated rosettes: a coarser one in the frame's bands, a finer one across the note
 const patterns = {
-  border: { columns: 8, rows: 3, spacing: 1.7 },
-  field: { columns: 7, rows: 3, spacing: 1.5 },
+  border: { columns: 8, rows: 3, spacing: 2.125 },
+  field: { columns: 7, rows: 3, spacing: 0.875 },
 }
 
-// the medallion left of center and the seal on the right (the frame's innermost rect is 11.35 in from the note's edge,
-// so everything below sits inside that)
-const medallion = { x: 42, y: 35, radius: 15, pen: 'ink' }
-const seal = { x: 120, y: 35, radius: 10.5, pen: 'accent' }
+// the seal in the middle of the note, as its centerpiece (the field starts 10.4 in from the note's edge, so it sits
+// inside that). spacing is how far apart its layers are: close together, so its rings read as dense engraving
+const seal = { x: 97.5, y: 43.75, radius: 18.75, pen: 'accent', spacing: 0.875 }
 
-// how much white space the field leaves around the medallion, the seal, and the lettering
-const halo = 2.2
+// how much white space the field leaves around the seal, and around the lettering
+const halo = { rosettes: 1.25, lettering: 2.75 }
 
 // what style each piece is drawn in, as weights (see styles.js). the patterns stick to the styles that stay mirrored
 // top to bottom on odd gears, so a cell's lines still meet its neighbors' at the seams
 const styleChances = {
-  medallion: { numismatic: 4, wavy: 2, standard: 2, inwardSpikes: 1, outwardSpikes: 1, ribbons: 1 },
-  seal: { numismatic: 4, wavy: 2, standard: 2, outwardSpikes: 1 },
-  pattern: { numismatic: 4, wavy: 2, standard: 1 },
+  seal: { standard: 1 },
+  pattern: { inwardSpikes: 1 },
 }
 
-// the lettering: x and y are its left and top (align moves it), and size scales the glyphs (they're 58 tall at 1)
+// the lettering, in cutive (single line, uppercase and digits only -- see cutive.js). x and y are its left and top
+// (align moves it), and size scales the glyphs (they're 58 tall at 1). room is extra white space cleared beside or
+// above a line, for somewhere to sign. framed draws a single rectangular rosette ring around the white space, and the
+// field stops right where its ink does
+const denominationSize = 0.1125
+const titleSize = 0.075
+// the title's middle lines up with the denominations'
+const titleY = 16.25 + (cutiveOutline.glyphHeight * denominationSize - cutive.glyphHeight * titleSize) / 2
+const serial = `R${hash.slice(2, 9).toUpperCase()}`
 const lettering = [
-  { text: 'ROSETTE RESERVE NOTE', x: 78, y: 12.5, size: 0.06, align: 'center' },
-  { text: '100', x: 13, y: 12.5, size: 0.1 },
-  { text: '100', x: 143, y: 12.5, size: 0.1, align: 'right' },
-  { text: 'ONE HUNDRED ROSETTES', x: 78, y: 51, size: 0.055, align: 'center' },
-  { text: 'SERIES 2026', x: 13, y: 51.5, size: 0.04 },
-  { text: 'PLOTTED BY HAND', x: 78, y: 17.5, size: 0.04, align: 'center' },
-  // the serials, from the hash
-  { text: `R${hash.slice(2, 9).toUpperCase()}`, x: 143, y: 51.5, size: 0.045, align: 'right', pen: 'accent' },
-  { text: `R${hash.slice(2, 9).toUpperCase()}`, x: 143, y: 21, size: 0.045, align: 'right', pen: 'accent' },
+  // the denominations are drawn as outlines, so they read as display type against the single lines
+  { text: '100', x: 16.25, y: 16.25, size: denominationSize, font: cutiveOutline, framed: true },
+  { text: '100', x: 178.75, y: 16.25, size: denominationSize, align: 'right', font: cutiveOutline, framed: true },
+  { text: 'REAL WORLD ASSETS', x: 97.5, y: titleY, size: titleSize, align: 'center', framed: true },
+  // the series line sits in the bottom right corner, with room to its left to sign
+  { text: 'SERIES 2026', x: 178.75, y: 64.375, size: 0.04375, align: 'right', room: { left: 26.875 } },
+  // the serial, from the hash
+  { text: serial, x: 16.25, y: 64.375, size: 0.05625, pen: 'accent' },
 ]
 
 const layout = {
   // points around each layer, and how long the short lines curves are drawn as (and lines are cut into pieces this
   // long before clipping)
   pointCount: 900,
-  clipStep: 0.4,
-  // how far apart the medallion's and the seal's layers are
-  medallionSpacing: 2.1,
+  clipStep: 0.5,
 }
 
 // each style's settings (styles.js says what they do). lengths are in layer spacings
@@ -164,9 +170,11 @@ const bands = times(frame.bands, k => {
   return [outer, outer + frame.width]
 })
 const innermost = bands.at(-1)[1]
+// where the field starts, past the frame's padding
+const interior = innermost + frame.padding
 
-// the medallion and the seal, each in its own style. their gears don't have to mirror top to bottom
-const rosetteAt = ({ x, y, radius, pen: which }, chances, spacing) => createRosette({
+// the seal, in its own style. its gears don't have to mirror top to bottom
+const rosetteAt = ({ x, y, radius, pen: which, spacing }, chances) => createRosette({
   ...shared,
   ...generateFeatures({
     ...features,
@@ -180,16 +188,42 @@ const rosetteAt = ({ x, y, radius, pen: which }, chances, spacing) => createRose
   minSize: spacing,
   layers: fitWithin(radius),
 })
-const medallionRosette = rosetteAt(medallion, styleChances.medallion, layout.medallionSpacing)
-const sealRosette = rosetteAt(seal, styleChances.seal, layout.medallionSpacing)
+const sealRosette = rosetteAt(seal, styleChances.seal)
 
-// what the field leaves white: the medallion, the seal, and every line of lettering
-const letterBoxes = lettering.map(({ text, x, y, size, align }) => ({ text, ...textBox(text, { x, y, size, align }) }))
+// what the field leaves white: the seal and every line of lettering
+const letterBoxes = lettering.map(({ text, x, y, size, align, font=cutive, room={}, framed=false }) =>
+  ({ text, room, framed, ...textBox(text, { x, y, size, align, font }) }))
+// each line's white space, grown by its room where it asks for somewhere to sign: its center and half sizes
+const letterSpace = ({ left, top, right, bottom, room }) => {
+  const up = room.up ?? 0
+  const before = room.left ?? 0
+  const after = room.right ?? 0
+  return [(left - before + right + after) / 2, (top - up + bottom) / 2,
+          (right + after - left + before) / 2 + halo.lettering, (bottom - top + up) / 2 + halo.lettering]
+}
+// the framed lines' rings: a single ring tracing the edge of the line's white space, on a rectangular base. they all
+// share one set of gears, so they wobble alike
+const frameFeatures = generateFeatures({
+  ...features,
+  style: 'single',
+  palette: [bill.ink],
+  gearOptions: { ...features.gearOptions, radiaMin: 0.015, radiaMax: 0.03, oddRotations: false },
+})
+const rosetteFrames = new Map(letterBoxes.filter(b => b.framed).map(b => {
+  const [x, y, hw, hh] = letterSpace(b)
+  return [b, createRosette({
+    ...shared,
+    ...frameFeatures,
+    center: [x, y],
+    base: rectBase({ exponent: 8, stretch: [hw - hh, 0] }),
+    layers: 1,
+    minSize: hh,
+  })]
+}))
 const clear = [
-  rosetteSdf(medallionRosette, halo + strokeWidth),
-  rosetteSdf(sealRosette, halo + strokeWidth),
-  ...letterBoxes.map(({ left, top, right, bottom }) =>
-    boxSdf((left + right) / 2, (top + bottom) / 2, (right - left) / 2 + halo, (bottom - top) / 2 + halo)),
+  rosetteSdf(sealRosette, halo.rosettes + strokeWidth),
+  // around the framed ones, grown by a pen width past the ring, so the field's ink touches it
+  ...letterBoxes.map(b => b.framed ? rosetteSdf(rosetteFrames.get(b), strokeWidth) : boxSdf(...letterSpace(b))),
 ]
 
 // one rosette repeated in every cell of a grid, each copy filling its cell, cut off at the cell's edges (so a cell's
@@ -232,36 +266,36 @@ const inBands = unionSdf(...bands.map(([outer, inner]) => {
 }))
 const border = drawPattern(patterns.border, [0, 0, W, H], inBands)
 
-// the field inside the frame, left white around the medallion, the seal, and the lettering
-const inset = innermost + strokeWidth
+// the field inside the frame, left white around the seal and the lettering
+const inset = interior + strokeWidth
 const field = drawPattern(patterns.field, [inset, inset, W - inset, H - inset], box(inset), clear)
 
-// the frame's lines
+// the frame's lines, and one around the field (its ink touching the field's)
 const rectPath = at => `M ${at},${at} ${W - at},${at} ${W - at},${H - at} ${at},${H - at} Z`
-for (const at of bands.flat()) svg.path(rectPath(at), { stroke: bill.ink, strokeWidth, strokeOpacity: bill.strokeOpacity })
+for (const at of [...bands.flat(), interior]) {
+  svg.path(rectPath(at), { stroke: bill.ink, strokeWidth, strokeOpacity: bill.strokeOpacity })
+}
 
-drawRosette(svg, medallionRosette)
 drawRosette(svg, sealRosette)
+rosetteFrames.forEach(ring => drawRosette(svg, ring))
 
-for (const { text, x, y, size, align, pen: which='ink' } of lettering) {
-  drawText(svg, text, { x, y, size, align, stroke: pens[which], strokeWidth, strokeOpacity: bill.strokeOpacity })
+for (const { text, x, y, size, align, pen: which='ink', font=cutive } of lettering) {
+  drawText(svg, text, { x, y, size, align, font, stroke: pens[which], strokeWidth, strokeOpacity: bill.strokeOpacity })
 }
 
 console.log({
   hash,
   styles: {
-    medallion: medallionRosette.config.style,
     seal: sealRosette.config.style,
     border: border.style,
     field: field.style,
   },
-  medallion: medallionRosette,
   seal: sealRosette,
   border,
   field,
   bands,
   letterBoxes,
-  interior: innermost,
+  interior,
 })
 
 svg.mount()
